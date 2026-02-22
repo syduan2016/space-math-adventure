@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Space Adventure Multiplication Game - Learn multiplication tables 1-9 through fun space shooter gameplay!">
+    <title>Space Math Adventure</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/ui.css">
+    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/animations.css">
+
+    <!-- Preload Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen active">
+            <div class="loading-content">
+                <h1 class="game-title">Space Math Adventure</h1>
+                <div class="rocket-animation"></div>
+                <p class="loading-text">Preparing Launch...</p>
+            </div>
+        </div>
+
+        <!-- Main Menu Screen -->
+        <div id="menu-screen" class="screen">
+            <div class="menu-content">
+                <h1 class="game-title">Space Math Adventure</h1>
+                <p class="tagline">Master multiplication through space battles!</p>
+
+                <div class="menu-buttons">
+                    <button id="btn-play" class="btn btn-primary btn-large">
+                        <span class="btn-icon">🚀</span>
+                        <span>Start Mission</span>
+                    </button>
+                    <button id="btn-progress" class="btn btn-secondary">
+                        <span class="btn-icon">📊</span>
+                        <span>View Progress</span>
+                    </button>
+                    <button id="btn-settings" class="btn btn-secondary">
+                        <span class="btn-icon">⚙️</span>
+                        <span>Settings</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level Select Screen -->
+        <div id="level-select-screen" class="screen">
+            <div class="screen-header">
+                <button id="btn-back-from-levels" class="btn btn-back">← Back</button>
+                <h2>Choose Your Mission</h2>
+            </div>
+
+            <div class="level-grid" id="level-grid">
+                <!-- Levels will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <!-- Game HUD -->
+            <div id="game-hud" class="game-hud">
+                <div class="hud-top">
+                    <div class="hud-left">
+                        <button id="btn-pause" class="btn btn-icon-only">⏸</button>
+                        <div class="score-display">
+                            <span class="label">Score:</span>
+                            <span id="score-value" class="value">0</span>
+                        </div>
+                    </div>
+                    <div class="hud-center">
+                        <div class="combo-display" id="combo-display">
+                            <span class="combo-text">Combo</span>
+                            <span class="combo-value" id="combo-value">0</span>
+                        </div>
+                    </div>
+                    <div class="hud-right">
+                        <div class="lives-display" id="lives-display">
+                            <!-- Hearts will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas for game rendering -->
+            <canvas id="game-canvas"></canvas>
+
+            <!-- Question Panel -->
+            <div id="question-panel" class="question-panel">
+                <div class="question-text" id="question-text">What is 3 × 7?</div>
+                <div class="answer-buttons" id="answer-buttons">
+                    <!-- Answer buttons will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="screen">
+            <div class="results-content">
+                <h2 class="results-title">Mission Complete!</h2>
+
+                <div class="stars-container" id="stars-container">
+                    <!-- Stars will be animated in by JavaScript -->
+                </div>
+
+                <div class="results-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Score</span>
+                        <span class="stat-value" id="result-score">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Accuracy</span>
+                        <span class="stat-value" id="result-accuracy">0%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Questions</span>
+                        <span class="stat-value" id="result-questions">0</span>
+                    </div>
+                </div>
+
+                <div class="achievements-unlocked" id="achievements-unlocked">
+                    <!-- New achievements will be shown here -->
+                </div>
+
+                <div class="auto-redirect-container" id="auto-redirect-container" style="display: none;">
+                    <p class="countdown-text">Continuing to Level Select in <span id="countdown-number">5</span>...</p>
+                    <button id="btn-continue-now" class="btn btn-primary">Continue Now</button>
+                </div>
+
+                <div class="results-buttons" id="results-buttons-container">
+                    <button id="btn-play-again" class="btn btn-primary">Play Again</button>
+                    <button id="btn-menu-from-results" class="btn btn-secondary">Main Menu</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Screen -->
+        <div id="progress-screen" class="screen">
+            <div class="screen-header">
+                <button id="btn-back-from-progress" class="btn btn-back">← Back</button>
+                <h2>Your Progress</h2>
+            </div>
+
+            <div class="progress-content">
+                <!-- Overall Stats -->
+                <div class="stats-card">
+                    <h3>Overall Stats</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-number" id="total-games">0</div>
+                            <div class="stat-label">Games Played</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="total-accuracy">0%</div>
+                            <div class="stat-label">Overall Accuracy</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="total-stars">0</div>
+                            <div class="stat-label">Stars Collected</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="tables-mastered">0/9</div>
+                            <div class="stat-label">Tables Mastered</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Progress -->
+                <div class="tables-card">
+                    <h3>Multiplication Tables</h3>
+                    <div class="tables-grid" id="tables-progress">
+                        <!-- Table progress will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Achievements -->
+                <div class="achievements-card">
+                    <h3>Achievements</h3>
+                    <div class="achievements-grid" id="achievements-grid">
+                        <!-- Achievements will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen">
+            <div class="screen-header">
+                <button id="btn-back-from-settings" class="btn btn-back">← Back</button>
+                <h2>Settings</h2>
+            </div>
+
+            <div class="settings-content">
+                <div class="settings-card">
+                    <h3>Audio Settings</h3>
+
+                    <div class="setting-item">
+                        <label for="music-toggle" class="setting-label">
+                            <span>Music</span>
+                            <input type="checkbox" id="music-toggle" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="music-volume" class="setting-label">
+                            <span>Music Volume</span>
+                            <input type="range" id="music-volume" min="0" max="100" value="50" class="slider">
+                            <span id="music-volume-value" class="volume-value">50%</span>
+                        </label>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="sfx-toggle" class="setting-label">
+                            <span>Sound Effects</span>
+                            <input type="checkbox" id="sfx-toggle" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="sfx-volume" class="setting-label">
+                            <span>SFX Volume</span>
+                            <input type="range" id="sfx-volume" min="0" max="100" value="80" class="slider">
+                            <span id="sfx-volume-value" class="volume-value">80%</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h3>Game Data</h3>
+                    <button id="btn-reset-progress" class="btn btn-warning">Reset All Progress</button>
+                    <p class="warning-text">This will erase all saved data and achievements!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pause Modal -->
+        <div id="pause-modal" class="modal">
+            <div class="modal-content">
+                <h3>Game Paused</h3>
+                <div class="modal-buttons">
+                    <button id="btn-resume" class="btn btn-primary">Resume</button>
+                    <button id="btn-quit" class="btn btn-secondary">Quit to Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/utils/constants.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/managers/StorageManager.js"></script>
+    <script src="js/managers/SoundManager.js"></script>
+    <script src="js/managers/ProgressManager.js"></script>
+    <script src="js/managers/RewardManager.js"></script>
+    <script src="js/game/QuestionManager.js"></script>
+    <script src="js/game/ParticleSystem.js"></script>
+    <script src="js/game/Projectile.js"></script>
+    <script src="js/game/Enemy.js"></script>
+    <script src="js/game/Player.js"></script>
+    <script src="js/game/GameEngine.js"></script>
+    <script src="js/ui/MenuScreen.js"></script>
+    <script src="js/ui/LevelSelect.js"></script>
+    <script src="js/ui/GameHUD.js"></script>
+    <script src="js/ui/ResultsScreen.js"></script>
+    <script src="js/ui/ProgressScreen.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
