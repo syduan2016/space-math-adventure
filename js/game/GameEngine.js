@@ -1,9 +1,21 @@
 // Game Engine - Main game loop and state management
 
 class GameEngine {
-    constructor(table) {
-        this.table = table;
-        this.config = getDifficultyTier(table);
+    constructor(levelConfig) {
+        // Support both old-style (table number) and new-style (levelConfig object)
+        if (typeof levelConfig === 'number') {
+            this.table = levelConfig;
+            this.config = getDifficultyTier(levelConfig);
+            this.operation = 'multiplication';
+            this.levelConfig = buildLevelConfig('multiplication', levelConfig);
+        } else {
+            this.levelConfig = levelConfig;
+            this.table = levelConfig.table || levelConfig.level || 1;
+            this.config = getOperationDifficultyTier(levelConfig.operation, levelConfig.level);
+            this.operation = levelConfig.operation || 'multiplication';
+            // Merge tier config with level config
+            this.config = { ...this.config, ...levelConfig };
+        }
 
         // Canvas setup
         this.canvas = document.getElementById('game-canvas');
@@ -11,23 +23,34 @@ class GameEngine {
         this.setupCanvas();
 
         // Game objects
-        this.player = new Player(this.canvas);
+        this.player = new Player(this.canvas, this.levelConfig.shipConfig || null);
         this.enemies = [];
         this.projectiles = [];
-        this.questionManager = new QuestionManager(table, this.config);
+        this.questionManager = new QuestionManager(this.levelConfig);
         this.particleSystem = new ParticleSystem(this.canvas);
+
+        // Power-up manager (if available)
+        this.powerUpManager = typeof PowerUpManager !== 'undefined' ? new PowerUpManager(this) : null;
+
+        // Adaptive difficulty (if available)
+        if (typeof adaptiveDifficultyManager !== 'undefined') {
+            this.questionManager.adaptiveManager = adaptiveDifficultyManager;
+        }
 
         // Game state
         this.isRunning = false;
         this.isPaused = false;
         this.isGameOver = false;
+        this.practiceMode = this.levelConfig.practiceMode || false;
         this.currentQuestion = null;
         this.questionStartTime = null;
 
         // Scoring
         this.score = 0;
         this.combo = 0;
-        this.lives = this.config.lives;
+        this.maxCombo = 0;
+        this.lives = this.practiceMode ? 10 : this.config.lives;
+        this.fastCorrectCount = 0; // For time freeze power-up
 
         // Timing
         this.lastTime = 0;
@@ -127,7 +150,19 @@ class GameEngine {
         if (result.isCorrect) {
             this.handleCorrectAnswer(result);
         } else {
-            this.handleWrongAnswer(result);
+            this.handleWrongAnswer(result, e.target);
+        }
+
+        // Trigger encouragement if available
+        if (typeof encouragementManager !== 'undefined') {
+            encouragementManager.showEncouragement({
+                wasCorrect: result.isCorrect,
+                question: this.currentQuestion,
+                responseTime: result.responseTime,
+                combo: this.combo,
+                accuracy: this.questionManager.getSessionStats().accuracy,
+                lives: this.lives
+            });
         }
 
         // Move to next question after delay
@@ -149,6 +184,12 @@ class GameEngine {
 
         // Update combo
         this.combo++;
+        if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+
+        // Track fast answers for power-ups
+        if (result.earnedSpeedBonus) {
+            this.fastCorrectCount++;
+        }
 
         // Calculate score
         let points = SCORING.BASE_POINTS;
@@ -162,7 +203,22 @@ class GameEngine {
         const multiplier = getComboMultiplier(this.combo);
         points = Math.floor(points * multiplier);
 
+        // Double points power-up
+        if (this.powerUpManager && this.powerUpManager.isActive('doublePoints')) {
+            points *= 2;
+        }
+
+        // Practice mode: reduced scoring
+        if (this.practiceMode) {
+            points = Math.floor(points * 0.5);
+        }
+
         this.score += points;
+
+        // Check power-up triggers
+        if (this.powerUpManager) {
+            this.powerUpManager.onCorrectAnswer(this.combo, this.fastCorrectCount, result.earnedSpeedBonus);
+        }
 
         // Update HUD
         this.updateHUD();
@@ -178,9 +234,28 @@ class GameEngine {
     }
 
     // Handle wrong answer
-    handleWrongAnswer(result) {
+    handleWrongAnswer(result, buttonElement) {
+        // Check for shield power-up
+        if (this.powerUpManager && this.powerUpManager.useShield()) {
+            // Shield absorbed the wrong answer
+            soundManager.playClick();
+            this.updateHUD();
+            return;
+        }
+
+        // Check for second chance power-up
+        if (this.powerUpManager && this.powerUpManager.useSecondChance()) {
+            // Re-enable buttons (except the wrong one) for another try
+            buttonElement.disabled = true;
+            const buttons = document.querySelectorAll('.answer-btn:not(.wrong)');
+            buttons.forEach(btn => btn.disabled = false);
+            soundManager.playClick();
+            return;
+        }
+
         // Reset combo
         this.combo = 0;
+        this.fastCorrectCount = 0;
 
         // Take damage
         this.lives--;
@@ -217,10 +292,17 @@ class GameEngine {
         document.getElementById('question-text').textContent = this.currentQuestion.questionText;
         this.updateAnswerButtons();
 
+        // Pre-fetch hint if AI hints available
+        if (typeof hintManager !== 'undefined') {
+            hintManager.prefetchHint(this.currentQuestion);
+        }
+
         // Spawn enemy with this question
         const x = randomInt(100, this.canvas.width - 100);
         const y = -GAME_CONFIG.ENEMY_HEIGHT;
-        const enemy = new Enemy(x, y, this.currentQuestion, this.config.enemySpeed, this.canvas);
+        const speed = this.powerUpManager && this.powerUpManager.isActive('timeFreeze')
+            ? 0 : this.config.enemySpeed;
+        const enemy = new Enemy(x, y, this.currentQuestion, speed, this.canvas);
         this.enemies.push(enemy);
 
         this.spawnTimer = 0;
@@ -235,7 +317,8 @@ class GameEngine {
         // Reset state
         this.score = 0;
         this.combo = 0;
-        this.lives = this.config.lives;
+        this.maxCombo = 0;
+        this.lives = this.practiceMode ? 10 : this.config.lives;
         this.enemies = [];
         this.projectiles = [];
         this.questionManager.reset();
@@ -244,8 +327,17 @@ class GameEngine {
         this.player.reset();
         this.player.lives = this.lives;
 
+        // Apply ship abilities
+        if (this.powerUpManager && this.levelConfig.shipConfig) {
+            this.powerUpManager.applyShipAbilities(this.levelConfig.shipConfig);
+        }
+
         // Update HUD
         this.updateHUD();
+
+        // Show hint button if AI hints available
+        const hintBtn = document.getElementById('btn-hint');
+        if (hintBtn) hintBtn.style.display = typeof hintManager !== 'undefined' ? 'block' : 'none';
 
         // Spawn first enemy
         this.spawnNextEnemy();
@@ -278,6 +370,11 @@ class GameEngine {
         // Update particle system
         this.particleSystem.update(deltaTime);
 
+        // Update power-ups
+        if (this.powerUpManager) {
+            this.powerUpManager.update(deltaTime);
+        }
+
         // Auto-shoot if enabled
         if (GAME_CONFIG.AUTO_SHOOT) {
             this.shootTimer += deltaTime;
@@ -289,12 +386,13 @@ class GameEngine {
 
         // Update enemies
         this.enemies = this.enemies.filter(enemy => {
-            enemy.update(deltaTime);
+            // Freeze enemies if time freeze is active
+            if (!(this.powerUpManager && this.powerUpManager.isActive('timeFreeze'))) {
+                enemy.update(deltaTime);
+            }
 
             // Check if enemy escaped
             if (enemy.hasEscaped() && !enemy.isDestroyed) {
-                // Enemy reached bottom - don't penalize for now
-                // (player must answer via buttons, not shoot)
                 return false;
             }
 
@@ -327,6 +425,11 @@ class GameEngine {
 
         // Render particles on top
         this.particleSystem.render();
+
+        // Render power-up effects
+        if (this.powerUpManager) {
+            this.powerUpManager.render(this.ctx);
+        }
     }
 
     // Draw animated background
@@ -381,8 +484,13 @@ class GameEngine {
         livesDisplay.innerHTML = '';
         for (let i = 0; i < this.lives; i++) {
             const heart = document.createElement('span');
-            heart.textContent = '❤️';
+            heart.textContent = '\u2764\ufe0f';
             livesDisplay.appendChild(heart);
+        }
+
+        // Update power-up HUD
+        if (this.powerUpManager) {
+            this.powerUpManager.updateHUD();
         }
     }
 
@@ -419,19 +527,26 @@ class GameEngine {
         // Prepare results
         const results = {
             table: this.table,
+            operation: this.operation,
+            level: this.levelConfig.level || this.table,
             score: this.score,
             accuracy: stats.accuracy,
             questionsAnswered: stats.questionsAnswered,
             correctAnswers: stats.correctAnswers,
             stars,
             speedBonuses: stats.speedBonuses,
-            maxCombo: this.combo,
+            maxCombo: this.maxCombo,
             livesRemaining: this.lives,
-            startingLives: this.config.lives
+            startingLives: this.practiceMode ? 10 : this.config.lives,
+            practiceMode: this.practiceMode,
+            wrongAnswers: this.questionManager.getWrongAnswers(),
+            questionHistory: this.questionManager.questionHistory
         };
 
-        // Save progress (will be implemented in Phase 3)
-        this.saveProgress(results);
+        // Save progress (skip for practice mode)
+        if (!this.practiceMode) {
+            this.saveProgress(results);
+        }
 
         // Show results screen
         if (window.app) {

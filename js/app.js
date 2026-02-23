@@ -12,6 +12,7 @@ class App {
         this.soundManager = null;
         this.isInitialized = false;
         this.countdownTimer = null;
+        this.selectedOperation = 'multiplication';
     }
 
     async init() {
@@ -106,6 +107,17 @@ class App {
         if (btnBackFromSettings) {
             btnBackFromSettings.addEventListener('click', () => this.navigateToMenu());
         }
+
+        // Operation tab buttons
+        const operationTabs = document.querySelectorAll('.operation-tab');
+        operationTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.selectedOperation = tab.dataset.operation;
+                operationTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                this.populateLevelSelect();
+            });
+        });
 
         // Results screen buttons
         const btnPlayAgain = document.getElementById('btn-play-again');
@@ -229,10 +241,10 @@ class App {
         this.loadSettings();
     }
 
-    navigateToGame(table) {
+    navigateToGame(operation, level) {
         this.playClickSound();
         this.showScreen('game-screen');
-        this.startGame(table);
+        this.startGame(operation, level);
     }
 
     navigateToResults(results) {
@@ -248,15 +260,16 @@ class App {
     }
 
     // Game control methods
-    startGame(table) {
-        console.log(`Starting game with table ${table}`);
+    startGame(operation, level) {
+        const levelConfig = buildLevelConfig(operation, level);
+        console.log(`Starting game: ${operation} level ${level}`, levelConfig);
 
         // Initialize game engine
         if (this.gameEngine) {
             this.gameEngine.stop();
         }
 
-        this.gameEngine = new GameEngine(table);
+        this.gameEngine = new GameEngine(levelConfig);
         this.gameEngine.start();
     }
 
@@ -306,19 +319,43 @@ class App {
 
         levelGrid.innerHTML = '';
 
-        const tableProgress = storageManager.getTableProgress();
+        const operation = this.selectedOperation;
+        const levels = OPERATION_LEVELS[operation];
+        if (!levels) return;
 
-        for (let table = 1; table <= 9; table++) {
-            const isUnlocked = isTableUnlocked(table, { tableProgress });
-            const progress = tableProgress[table];
-            const tier = getDifficultyTier(table);
-            const mastery = MASTERY_LEVELS[progress.mastery.toUpperCase()];
+        const tableProgress = storageManager.getTableProgress();
+        const operationProgress = storageManager.getOperationProgress();
+
+        levels.forEach(levelDef => {
+            const level = levelDef.level;
+            const progressKey = getProgressKey(operation, level);
+
+            // Determine unlock status
+            let isUnlocked;
+            if (operation === 'multiplication') {
+                isUnlocked = isTableUnlocked(level, { tableProgress });
+            } else {
+                isUnlocked = isOperationLevelUnlocked(operation, level, operationProgress);
+            }
+
+            // Get progress data
+            let progress;
+            if (operation === 'multiplication') {
+                progress = tableProgress[level] || DEFAULT_OPERATION_PROGRESS_ENTRY;
+            } else {
+                progress = operationProgress[progressKey] || DEFAULT_OPERATION_PROGRESS_ENTRY;
+            }
+
+            const tier = getOperationDifficultyTier(operation, level);
+            const masteryKey = (progress.mastery || 'learning').toUpperCase();
+            const mastery = MASTERY_LEVELS[masteryKey] || MASTERY_LEVELS.LEARNING;
+            const opLabel = OPERATION_LABELS[operation];
 
             const levelCard = document.createElement('div');
             levelCard.className = `level-card ${isUnlocked ? '' : 'locked'}`;
             levelCard.innerHTML = `
-                <div class="level-number">${table}</div>
-                <div class="level-title">${table} Times Table</div>
+                <div class="level-number">${opLabel.icon}</div>
+                <div class="level-title">${levelDef.label}</div>
                 <div class="level-tier" style="color: ${tier.color}">${tier.name}</div>
                 <div class="level-mastery">
                     <span class="mastery-icon">${mastery.icon}</span>
@@ -327,11 +364,11 @@ class App {
                 <div class="level-stats">
                     <div class="stat-small">
                         <span class="label">Accuracy:</span>
-                        <span class="value">${Math.round(progress.accuracy)}%</span>
+                        <span class="value">${Math.round(progress.accuracy || 0)}%</span>
                     </div>
                     <div class="stat-small">
                         <span class="label">Games:</span>
-                        <span class="value">${progress.gamesPlayed}</span>
+                        <span class="value">${progress.gamesPlayed || 0}</span>
                     </div>
                 </div>
                 ${!isUnlocked ? '<div class="lock-icon">🔒</div>' : ''}
@@ -339,12 +376,12 @@ class App {
 
             if (isUnlocked) {
                 levelCard.addEventListener('click', () => {
-                    this.navigateToGame(table);
+                    this.navigateToGame(operation, level);
                 });
             }
 
             levelGrid.appendChild(levelCard);
-        }
+        });
     }
 
     // Progress display
@@ -362,7 +399,7 @@ class App {
         if (totalStars) totalStars.textContent = stats.totalStars;
         if (tablesMastered) tablesMastered.textContent = `${stats.tablesMastered}/${stats.totalTables}`;
 
-        // Update table progress grid
+        // Update table/operation progress grid
         this.updateTableProgressGrid();
 
         // Update achievements grid
@@ -375,26 +412,76 @@ class App {
 
         tablesGrid.innerHTML = '';
 
-        const tableProgress = storageManager.getTableProgress();
+        // Add operation tabs for progress view
+        const tabsContainer = document.createElement('div');
+        tabsContainer.className = 'progress-operation-tabs';
+        tabsContainer.style.gridColumn = '1 / -1';
 
-        for (let table = 1; table <= 9; table++) {
-            const progress = tableProgress[table];
-            const mastery = MASTERY_LEVELS[progress.mastery.toUpperCase()];
+        const operations = ['multiplication', 'addition', 'subtraction'];
+        const progressOperation = this._progressViewOperation || 'multiplication';
 
-            const tableCard = document.createElement('div');
-            tableCard.className = 'table-progress-card';
-            tableCard.innerHTML = `
-                <div class="table-number">${table}x</div>
-                <div class="mastery-badge" style="background: ${mastery.color}">
-                    ${mastery.icon}
-                </div>
-                <div class="table-stats">
-                    <div>${Math.round(progress.accuracy)}% accuracy</div>
-                    <div>${progress.gamesPlayed} games</div>
-                </div>
-            `;
+        operations.forEach(op => {
+            const opLabel = OPERATION_LABELS[op];
+            const btn = document.createElement('button');
+            btn.className = `progress-operation-tab ${op === progressOperation ? 'active' : ''}`;
+            btn.textContent = `${opLabel.icon} ${opLabel.name}`;
+            btn.addEventListener('click', () => {
+                this._progressViewOperation = op;
+                this.updateTableProgressGrid();
+            });
+            tabsContainer.appendChild(btn);
+        });
 
-            tablesGrid.appendChild(tableCard);
+        tablesGrid.appendChild(tabsContainer);
+
+        if (progressOperation === 'multiplication') {
+            // Show multiplication tables 1-9
+            const tableProgress = storageManager.getTableProgress();
+            for (let table = 1; table <= 9; table++) {
+                const progress = tableProgress[table];
+                const masteryKey = (progress.mastery || 'learning').toUpperCase();
+                const mastery = MASTERY_LEVELS[masteryKey] || MASTERY_LEVELS.LEARNING;
+
+                const tableCard = document.createElement('div');
+                tableCard.className = 'table-progress-card';
+                tableCard.innerHTML = `
+                    <div class="table-number">${table}x</div>
+                    <div class="mastery-badge" style="background: ${mastery.color}">
+                        ${mastery.icon}
+                    </div>
+                    <div class="table-stats">
+                        <div>${Math.round(progress.accuracy)}% accuracy</div>
+                        <div>${progress.gamesPlayed} games</div>
+                    </div>
+                `;
+                tablesGrid.appendChild(tableCard);
+            }
+        } else {
+            // Show operation levels
+            const operationProgress = storageManager.getOperationProgress();
+            const levels = OPERATION_LEVELS[progressOperation] || [];
+
+            levels.forEach(levelDef => {
+                const progressKey = getProgressKey(progressOperation, levelDef.level);
+                const progress = operationProgress[progressKey] || DEFAULT_OPERATION_PROGRESS_ENTRY;
+                const masteryKey = (progress.mastery || 'learning').toUpperCase();
+                const mastery = MASTERY_LEVELS[masteryKey] || MASTERY_LEVELS.LEARNING;
+
+                const tableCard = document.createElement('div');
+                tableCard.className = 'table-progress-card';
+                tableCard.innerHTML = `
+                    <div class="table-number">${OPERATION_LABELS[progressOperation].icon}</div>
+                    <div style="font-size: var(--font-size-sm); font-weight: 600; margin-bottom: 4px;">${levelDef.label}</div>
+                    <div class="mastery-badge" style="background: ${mastery.color}">
+                        ${mastery.icon}
+                    </div>
+                    <div class="table-stats">
+                        <div>${Math.round(progress.accuracy || 0)}% accuracy</div>
+                        <div>${progress.gamesPlayed || 0} games</div>
+                    </div>
+                `;
+                tablesGrid.appendChild(tableCard);
+            });
         }
     }
 
@@ -425,6 +512,27 @@ class App {
     // Results display
     displayResults(results) {
         this.lastResults = results;
+
+        // Show operation + level header
+        const resultsTitle = document.querySelector('.results-title');
+        if (resultsTitle) {
+            const op = results.operation || 'multiplication';
+            const opLabel = OPERATION_LABELS[op] || OPERATION_LABELS.multiplication;
+            const opLevels = OPERATION_LEVELS[op];
+            const levelDef = opLevels ? opLevels.find(l => l.level === (results.level || results.table)) : null;
+            const levelLabel = levelDef ? levelDef.label : '';
+
+            // Add operation header above the title
+            let opHeader = document.getElementById('results-operation-header');
+            if (!opHeader) {
+                opHeader = document.createElement('div');
+                opHeader.id = 'results-operation-header';
+                opHeader.className = 'results-operation-header';
+                resultsTitle.parentNode.insertBefore(opHeader, resultsTitle);
+            }
+            opHeader.innerHTML = `<span class="operation-symbol">${opLabel.icon}</span> ${opLabel.name} — ${levelLabel}`;
+        }
+
         // Update results screen with data
         document.getElementById('result-score').textContent = formatNumber(results.score);
         document.getElementById('result-accuracy').textContent = results.accuracy + '%';

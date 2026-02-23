@@ -5,20 +5,68 @@ class ProgressManager {
         this.storage = storageManager;
         this.profile = this.storage.getProfile();
         this.tableProgress = this.storage.getTableProgress();
+        this._migrateProgressData();
+    }
+
+    // Migrate existing multiplication table progress into operationProgress format
+    _migrateProgressData() {
+        const operationProgress = this.storage.getOperationProgress();
+
+        // If operationProgress already has multiplication keys, skip
+        if (operationProgress['mul_1']) return;
+
+        // Check if there's any table progress to migrate
+        let hasData = false;
+        for (let t = 1; t <= 9; t++) {
+            if (this.tableProgress[t] && this.tableProgress[t].gamesPlayed > 0) {
+                hasData = true;
+                break;
+            }
+        }
+
+        if (!hasData) return;
+
+        // Copy table progress into operationProgress as mul_1 through mul_9
+        for (let t = 1; t <= 9; t++) {
+            const key = getProgressKey('multiplication', t);
+            const td = this.tableProgress[t];
+            if (td) {
+                this.storage.updateOperationProgress(key, {
+                    mastery: td.mastery,
+                    accuracy: td.accuracy,
+                    gamesPlayed: td.gamesPlayed,
+                    questionsAnswered: td.questionsAnswered,
+                    correctAnswers: td.correctAnswers,
+                    bestScore: td.bestScore,
+                    bestStars: td.bestStars
+                });
+            }
+        }
+        console.log('Migrated multiplication progress to operationProgress');
     }
 
     // Save game session results
     saveGameSession(results) {
+        const operation = results.operation || 'multiplication';
+        const level = results.level || results.table;
+
         // Update profile stats
         this.updateProfileStats(results);
 
-        // Update table-specific progress
-        this.updateTableProgress(results);
+        // Update table-specific progress (for backward compat with multiplication)
+        if (operation === 'multiplication') {
+            this.updateTableProgress(results);
+        }
+
+        // Update operation progress for ALL operations
+        this.updateOperationProgress(operation, level, results);
 
         // Add to session history
         const sessionData = {
             date: new Date().toISOString(),
             table: results.table,
+            operation: operation,
+            level: level,
             score: results.score,
             accuracy: results.accuracy,
             questionsAnswered: results.questionsAnswered,
@@ -32,13 +80,61 @@ class ProgressManager {
         this.storage.addSession(sessionData);
 
         // Recalculate mastery levels
-        this.recalculateMastery(results.table);
+        if (operation === 'multiplication') {
+            this.recalculateMastery(results.table);
+        }
+        this.recalculateOperationMastery(operation, level);
+
+        const progressKey = getProgressKey(operation, level);
+        const opProgress = this.storage.getOperationProgress();
 
         return {
-            newMastery: this.tableProgress[results.table].mastery,
+            newMastery: operation === 'multiplication'
+                ? this.tableProgress[results.table].mastery
+                : (opProgress[progressKey] || {}).mastery || 'learning',
             starsEarned: results.stars,
             totalStars: this.profile.totalStars
         };
+    }
+
+    // Update operation-specific progress
+    updateOperationProgress(operation, level, results) {
+        const key = getProgressKey(operation, level);
+        const allProgress = this.storage.getOperationProgress();
+        const existing = allProgress[key] || { ...DEFAULT_OPERATION_PROGRESS_ENTRY };
+
+        existing.gamesPlayed = (existing.gamesPlayed || 0) + 1;
+        existing.questionsAnswered = (existing.questionsAnswered || 0) + results.questionsAnswered;
+        existing.correctAnswers = (existing.correctAnswers || 0) + results.correctAnswers;
+
+        if (existing.questionsAnswered > 0) {
+            existing.accuracy = Math.round(
+                (existing.correctAnswers / existing.questionsAnswered) * 100
+            );
+        }
+
+        if (results.score > (existing.bestScore || 0)) {
+            existing.bestScore = results.score;
+        }
+        if (results.stars > (existing.bestStars || 0)) {
+            existing.bestStars = results.stars;
+        }
+
+        this.storage.updateOperationProgress(key, existing);
+    }
+
+    // Recalculate mastery for an operation level
+    recalculateOperationMastery(operation, level) {
+        const key = getProgressKey(operation, level);
+        const allProgress = this.storage.getOperationProgress();
+        const data = allProgress[key];
+        if (!data) return;
+
+        const newMastery = calculateMasteryLevel(data);
+        if (newMastery !== data.mastery) {
+            data.mastery = newMastery;
+            this.storage.updateOperationProgress(key, data);
+        }
     }
 
     // Update overall profile statistics
@@ -212,17 +308,14 @@ class ProgressManager {
         };
     }
 
-    // Get weak areas (tables that need practice)
+    // Get weak areas (tables and operation levels that need practice)
     getWeakAreas() {
         const weakAreas = [];
 
+        // Check multiplication table progress
         Object.keys(this.tableProgress).forEach(table => {
             const tableData = this.tableProgress[table];
 
-            // Consider weak if:
-            // - Played at least once
-            // - Accuracy below 70%
-            // - Not yet mastered
             if (
                 tableData.gamesPlayed > 0 &&
                 tableData.accuracy < 70 &&
@@ -230,27 +323,58 @@ class ProgressManager {
             ) {
                 weakAreas.push({
                     table: parseInt(table),
+                    operation: 'multiplication',
+                    level: parseInt(table),
                     accuracy: tableData.accuracy,
                     gamesPlayed: tableData.gamesPlayed
                 });
             }
         });
 
-        // Sort by accuracy (lowest first)
-        weakAreas.sort((a, b) => a.accuracy - b.accuracy);
+        // Check operation progress for non-multiplication
+        const operationProgress = this.storage.getOperationProgress();
+        Object.keys(operationProgress).forEach(key => {
+            // Skip multiplication keys (already handled above)
+            if (key.startsWith('mul_')) return;
 
+            const data = operationProgress[key];
+            if (
+                data.gamesPlayed > 0 &&
+                data.accuracy < 70 &&
+                data.mastery !== MASTERY_LEVELS.MASTERED.id
+            ) {
+                // Parse key to get operation and level
+                const parts = key.split('_');
+                const prefix = parts[0];
+                const level = parseInt(parts[1]);
+                const opMap = { add: 'addition', sub: 'subtraction', div: 'division', mix: 'mixed' };
+                const operation = opMap[prefix] || prefix;
+
+                weakAreas.push({
+                    operation,
+                    level,
+                    accuracy: data.accuracy,
+                    gamesPlayed: data.gamesPlayed
+                });
+            }
+        });
+
+        weakAreas.sort((a, b) => a.accuracy - b.accuracy);
         return weakAreas;
     }
 
-    // Get recommended practice (which table to practice next)
+    // Get recommended practice (which table/level to practice next)
     getRecommendedPractice() {
         // Priority 1: Weak areas
         const weakAreas = this.getWeakAreas();
         if (weakAreas.length > 0) {
+            const weak = weakAreas[0];
             return {
-                table: weakAreas[0].table,
+                table: weak.table || weak.level,
+                operation: weak.operation || 'multiplication',
+                level: weak.level || weak.table,
                 reason: 'Needs practice',
-                currentAccuracy: weakAreas[0].accuracy
+                currentAccuracy: weak.accuracy
             };
         }
 
@@ -262,6 +386,8 @@ class ProgressManager {
             if (isUnlocked && tableData.gamesPlayed < 3) {
                 return {
                     table,
+                    operation: 'multiplication',
+                    level: table,
                     reason: 'New challenge',
                     gamesPlayed: tableData.gamesPlayed
                 };
@@ -280,6 +406,8 @@ class ProgressManager {
             const randomTable = randomChoice(unlockedTables);
             return {
                 table: randomTable,
+                operation: 'multiplication',
+                level: randomTable,
                 reason: 'Keep practicing',
                 mastery: this.tableProgress[randomTable].mastery
             };
@@ -288,6 +416,8 @@ class ProgressManager {
         // Default: table 1
         return {
             table: 1,
+            operation: 'multiplication',
+            level: 1,
             reason: 'Start here',
             mastery: MASTERY_LEVELS.LEARNING.id
         };

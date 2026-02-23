@@ -339,7 +339,11 @@ const STORAGE_KEYS = {
     TABLE_PROGRESS: 'spaceMath_tableProgress',
     SESSION_HISTORY: 'spaceMath_sessionHistory',
     ACHIEVEMENTS: 'spaceMath_achievements',
-    SETTINGS: 'spaceMath_settings'
+    SETTINGS: 'spaceMath_settings',
+    OPERATION_PROGRESS: 'spaceMath_operationProgress',
+    FACT_PERFORMANCE: 'spaceMath_factPerformance',
+    EQUIPPED_SHIP: 'spaceMath_equippedShip',
+    UNLOCKED_SHIPS: 'spaceMath_unlockedShips'
 };
 
 // Default player profile
@@ -417,3 +421,118 @@ function getMusicForTable(table) {
     if (tier === DIFFICULTY_TIERS.intermediate) return SOUNDS.music.game2;
     return SOUNDS.music.game3;
 }
+
+// Ship configurations
+const SHIP_CONFIGS = {
+    explorer: {
+        id: 'explorer',
+        name: 'Explorer',
+        cost: 0,
+        description: 'Your trusty starter ship',
+        colors: { primary: '#00d9ff', secondary: '#b537f2' },
+        trailColor: '#ffd500',
+        ability: null,
+        abilityDescription: 'No special ability'
+    },
+    comet: {
+        id: 'comet',
+        name: 'Comet',
+        cost: 50,
+        description: 'Blazing fast with extra protection',
+        colors: { primary: '#ff6b35', secondary: '#ff2222' },
+        trailColor: '#ff4500',
+        ability: 'extraLife',
+        abilityDescription: '+1 starting life'
+    },
+    nova: {
+        id: 'nova',
+        name: 'Nova',
+        cost: 150,
+        description: 'Brilliant and swift',
+        colors: { primary: '#ffffff', secondary: '#ffd700' },
+        trailColor: '#ffe066',
+        ability: 'speedBonus',
+        abilityDescription: '10% faster speed bonus threshold'
+    },
+    nebula: {
+        id: 'nebula',
+        name: 'Nebula',
+        cost: 300,
+        description: 'Cosmic dust shields you',
+        colors: { primary: '#e040fb', secondary: '#ff80ab' },
+        trailColor: '#ce93d8',
+        ability: 'startShield',
+        abilityDescription: 'Starts with Shield power-up'
+    },
+    galaxy: {
+        id: 'galaxy',
+        name: 'Galaxy',
+        cost: 500,
+        description: 'The ultimate math machine',
+        colors: { primary: '#ff0000', secondary: '#0000ff' },
+        trailColor: '#ffffff',
+        ability: 'comboBoost',
+        abilityDescription: '2x combo growth rate'
+    }
+};
+
+// Power-up configurations
+const POWER_UP_CONFIGS = {
+    shield: {
+        id: 'shield',
+        name: 'Shield',
+        icon: '\ud83d\udee1\ufe0f',
+        description: 'Absorbs one wrong answer',
+        trigger: 'combo',
+        triggerValue: 5,
+        duration: null // Until used
+    },
+    timeFreeze: {
+        id: 'timeFreeze',
+        name: 'Time Freeze',
+        icon: '\u2744\ufe0f',
+        description: 'Pauses enemy descent for 8 seconds',
+        trigger: 'fastCorrect',
+        triggerValue: 3,
+        duration: 8000
+    },
+    doublePoints: {
+        id: 'doublePoints',
+        name: 'Double Points',
+        icon: '\u2728',
+        description: 'Next 3 answers worth 2x points',
+        trigger: 'random',
+        triggerValue: 0.15,
+        duration: null, // 3 answers
+        uses: 3
+    },
+    hintReveal: {
+        id: 'hintReveal',
+        name: 'Hint Reveal',
+        icon: '\ud83d\udca1',
+        description: 'Eliminates one wrong choice',
+        trigger: 'manual',
+        triggerValue: 500, // star cost
+        duration: null
+    },
+    secondChance: {
+        id: 'secondChance',
+        name: 'Second Chance',
+        icon: '\ud83d\udd04',
+        description: 'One retry on a wrong answer',
+        trigger: 'sessionEnd',
+        triggerValue: 90, // accuracy threshold
+        duration: null
+    }
+};
+
+// Default operation progress entry
+const DEFAULT_OPERATION_PROGRESS_ENTRY = {
+    mastery: 'learning',
+    accuracy: 0,
+    gamesPlayed: 0,
+    questionsAnswered: 0,
+    correctAnswers: 0,
+    bestScore: 0,
+    bestStars: 0
+};

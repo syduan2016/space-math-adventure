@@ -56,6 +56,24 @@ class StorageManager {
         if (!this.get(STORAGE_KEYS.SETTINGS)) {
             this.set(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
         }
+
+        // Initialize operation progress (all operations)
+        if (!this.get(STORAGE_KEYS.OPERATION_PROGRESS)) {
+            this.set(STORAGE_KEYS.OPERATION_PROGRESS, {});
+        }
+
+        // Initialize fact performance
+        if (!this.get(STORAGE_KEYS.FACT_PERFORMANCE)) {
+            this.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+        }
+
+        // Initialize ship data
+        if (!this.get(STORAGE_KEYS.EQUIPPED_SHIP)) {
+            this.set(STORAGE_KEYS.EQUIPPED_SHIP, 'explorer');
+        }
+        if (!this.get(STORAGE_KEYS.UNLOCKED_SHIPS)) {
+            this.set(STORAGE_KEYS.UNLOCKED_SHIPS, ['explorer']);
+        }
     }
 
     // Get item from localStorage
@@ -234,6 +252,7 @@ class StorageManager {
         const data = {
             profile: this.getProfile(),
             tableProgress: this.getTableProgress(),
+            operationProgress: this.getOperationProgress(),
             sessionHistory: this.getSessionHistory(),
             achievements: this.getAchievements(),
             settings: this.getSettings(),
@@ -261,12 +280,80 @@ class StorageManager {
             this.set(STORAGE_KEYS.SESSION_HISTORY, data.sessionHistory || []);
             this.set(STORAGE_KEYS.ACHIEVEMENTS, data.achievements || {});
             this.set(STORAGE_KEYS.SETTINGS, data.settings || DEFAULT_SETTINGS);
+            if (data.operationProgress) {
+                this.set(STORAGE_KEYS.OPERATION_PROGRESS, data.operationProgress);
+            }
 
             return true;
         } catch (e) {
             console.error('Error importing data:', e);
             return false;
         }
+    }
+
+    // Get operation progress (all operations)
+    getOperationProgress() {
+        return this.get(STORAGE_KEYS.OPERATION_PROGRESS) || {};
+    }
+
+    // Update operation progress for a specific key
+    updateOperationProgress(key, updates) {
+        const allProgress = this.getOperationProgress();
+        allProgress[key] = { ...(allProgress[key] || DEFAULT_OPERATION_PROGRESS_ENTRY), ...updates };
+        return this.set(STORAGE_KEYS.OPERATION_PROGRESS, allProgress);
+    }
+
+    // Get a single operation progress entry with defaults
+    getOperationProgressEntry(key) {
+        const allProgress = this.getOperationProgress();
+        return allProgress[key] || { ...DEFAULT_OPERATION_PROGRESS_ENTRY };
+    }
+
+    // Get fact performance data
+    getFactPerformance() {
+        return this.get(STORAGE_KEYS.FACT_PERFORMANCE) || {};
+    }
+
+    // Update fact performance
+    updateFactPerformance(factKey, data) {
+        const facts = this.getFactPerformance();
+        facts[factKey] = { ...(facts[factKey] || {}), ...data };
+        return this.set(STORAGE_KEYS.FACT_PERFORMANCE, facts);
+    }
+
+    // Get equipped ship
+    getEquippedShip() {
+        return this.get(STORAGE_KEYS.EQUIPPED_SHIP) || 'explorer';
+    }
+
+    // Set equipped ship
+    setEquippedShip(shipId) {
+        return this.set(STORAGE_KEYS.EQUIPPED_SHIP, shipId);
+    }
+
+    // Get unlocked ships
+    getUnlockedShips() {
+        return this.get(STORAGE_KEYS.UNLOCKED_SHIPS) || ['explorer'];
+    }
+
+    // Unlock a ship
+    unlockShip(shipId) {
+        const ships = this.getUnlockedShips();
+        if (!ships.includes(shipId)) {
+            ships.push(shipId);
+            return this.set(STORAGE_KEYS.UNLOCKED_SHIPS, ships);
+        }
+        return true;
+    }
+
+    // Spend stars (returns true if successful)
+    spendStars(amount) {
+        const profile = this.getProfile();
+        if (profile.totalStars >= amount) {
+            profile.totalStars -= amount;
+            return this.set(STORAGE_KEYS.PLAYER_PROFILE, profile);
+        }
+        return false;
     }
 
     // Get statistics for display

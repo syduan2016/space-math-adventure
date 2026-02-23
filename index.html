@@ -58,6 +58,12 @@
                 <h2>Choose Your Mission</h2>
             </div>
 
+            <div class="operation-tabs" id="operation-tabs">
+                <button class="operation-tab active" data-operation="multiplication">✖️ Multiplication</button>
+                <button class="operation-tab" data-operation="addition">➕ Addition</button>
+                <button class="operation-tab" data-operation="subtraction">➖ Subtraction</button>
+            </div>
+
             <div class="level-grid" id="level-grid">
                 <!-- Levels will be populated by JavaScript -->
             </div>
@@ -257,6 +263,8 @@
     <!-- JavaScript -->
     <script src="js/utils/constants.js"></script>
     <script src="js/utils/helpers.js"></script>
+    <script src="js/utils/operationConfigs.js"></script>
+    <script src="js/game/QuestionGenerators.js"></script>
     <script src="js/managers/StorageManager.js"></script>
     <script src="js/managers/SoundManager.js"></script>
     <script src="js/managers/ProgressManager.js"></script>

@@ -1,113 +1,70 @@
-// Question Manager - Generates multiplication questions and validates answers
+// Question Manager - Generates questions and validates answers using operation-specific generators
 
 class QuestionManager {
-    constructor(table, config) {
-        this.table = table; // Which multiplication table (1-9)
-        this.config = config || getDifficultyTier(table);
+    constructor(levelConfig) {
+        // Support both old-style (table number) and new-style (levelConfig object)
+        if (typeof levelConfig === 'number') {
+            this.table = levelConfig;
+            this.config = getDifficultyTier(levelConfig);
+            this.operation = 'multiplication';
+            this.levelConfig = buildLevelConfig('multiplication', levelConfig);
+        } else {
+            this.levelConfig = levelConfig;
+            this.table = levelConfig.table || levelConfig.level || 1;
+            this.config = levelConfig;
+            this.operation = levelConfig.operation || 'multiplication';
+        }
+
+        // Create the appropriate generator
+        this.generator = createQuestionGenerator(this.operation, {
+            ...this.config,
+            table: this.table,
+            level: this.levelConfig.level || this.table
+        });
+
         this.currentQuestion = null;
         this.questionHistory = [];
         this.usedQuestions = new Set();
+        this.adaptiveManager = null; // Set externally if adaptive mode is on
     }
 
-    // Generate a new multiplication question
+    // Generate a new question
     generateQuestion() {
-        const multiplier = randomInt(1, 9);
-        const correctAnswer = this.table * multiplier;
+        const question = this.generator.generate();
 
-        // Avoid repeating questions in the same session
-        const questionKey = `${this.table}x${multiplier}`;
-
-        // If we've used all questions, reset
-        if (this.usedQuestions.size >= 9) {
-            this.usedQuestions.clear();
+        // Apply adaptive weighting if available
+        if (this.adaptiveManager) {
+            const weights = this.adaptiveManager.getQuestionWeights(this.operation, this.table || this.levelConfig.level);
+            // Potentially regenerate if this fact is already strong and there are weak ones
+            if (weights && weights[question.factKey] !== undefined && Math.random() < 0.5) {
+                const weakFacts = this.adaptiveManager.getWeakestFacts(this.operation, 3);
+                if (weakFacts.length > 0 && !weakFacts.some(f => f.factKey === question.factKey)) {
+                    // Try to get a question for a weak fact - but don't infinite loop
+                    const retry = this.generator.generate();
+                    if (weakFacts.some(f => f.factKey === retry.factKey)) {
+                        return this._setCurrentQuestion(retry);
+                    }
+                }
+            }
         }
 
-        // Try to find an unused question
-        let attempts = 0;
-        let finalMultiplier = multiplier;
-        while (this.usedQuestions.has(`${this.table}x${finalMultiplier}`) && attempts < 10) {
-            finalMultiplier = randomInt(1, 9);
-            attempts++;
-        }
+        return this._setCurrentQuestion(question);
+    }
 
-        const finalCorrectAnswer = this.table * finalMultiplier;
-        this.usedQuestions.add(`${this.table}x${finalMultiplier}`);
-
-        // Generate answer choices
-        const answers = this.generateAnswerChoices(finalCorrectAnswer);
-
+    _setCurrentQuestion(question) {
         this.currentQuestion = {
-            table: this.table,
-            multiplier: finalMultiplier,
-            questionText: `${this.table} × ${finalMultiplier}`,
-            correctAnswer: finalCorrectAnswer,
-            answers: answers,
+            ...question,
             answeredAt: null,
             isCorrect: null,
             responseTime: null
         };
-
         return this.currentQuestion;
     }
 
     // Generate answer choices (1 correct + distractors)
     generateAnswerChoices(correctAnswer) {
-        const numChoices = this.config.answerChoices;
-        const choices = [correctAnswer];
-
-        // Generate smart distractors
-        const distractors = this.generateSmartDistractors(correctAnswer, numChoices - 1);
-        choices.push(...distractors);
-
-        // Shuffle the choices
-        return shuffleArray(choices);
-    }
-
-    // Generate plausible wrong answers
-    generateSmartDistractors(correctAnswer, count) {
-        const distractors = new Set();
-
-        // Strategy 1: Off-by-one multiplication table
-        // e.g., for 6×7=42, include 5×7=35 or 7×7=49
-        if (this.table > 1) {
-            distractors.add((this.table - 1) * (correctAnswer / this.table));
-        }
-        if (this.table < 9) {
-            distractors.add((this.table + 1) * (correctAnswer / this.table));
-        }
-
-        // Strategy 2: Common arithmetic errors
-        distractors.add(correctAnswer + this.table); // Add instead of multiply
-        distractors.add(correctAnswer - this.table);
-        distractors.add(correctAnswer + 1);
-        distractors.add(correctAnswer - 1);
-
-        // Strategy 3: Nearby multiples
-        if (correctAnswer >= 10) {
-            distractors.add(correctAnswer + 10);
-            distractors.add(correctAnswer - 10);
-        }
-
-        // Strategy 4: Similar-looking numbers
-        distractors.add(correctAnswer + this.table * 2);
-        distractors.add(correctAnswer - this.table * 2);
-
-        // Remove the correct answer if it somehow got added
-        distractors.delete(correctAnswer);
-
-        // Remove negative numbers and zero
-        const validDistractors = Array.from(distractors).filter(d => d > 0 && d !== correctAnswer);
-
-        // If we don't have enough, add more random ones
-        while (validDistractors.length < count) {
-            const randomDistractor = correctAnswer + randomInt(-15, 15);
-            if (randomDistractor > 0 && randomDistractor !== correctAnswer && !validDistractors.includes(randomDistractor)) {
-                validDistractors.push(randomDistractor);
-            }
-        }
-
-        // Shuffle and return the required count
-        return shuffleArray(validDistractors).slice(0, count);
+        const numChoices = this.config.answerChoices || 4;
+        return this.generator.generateAnswerChoices(correctAnswer, numChoices);
     }
 
     // Check if an answer is correct
@@ -125,11 +82,22 @@ class QuestionManager {
         // Add to history
         this.questionHistory.push({ ...this.currentQuestion });
 
+        // Record for adaptive difficulty
+        if (this.adaptiveManager) {
+            this.adaptiveManager.recordAttempt(
+                this.currentQuestion.factKey,
+                this.operation,
+                isCorrect,
+                responseTime
+            );
+        }
+
         return {
             isCorrect,
             responseTime,
             correctAnswer: this.currentQuestion.correctAnswer,
-            earnedSpeedBonus: responseTime < this.config.timeBonus
+            earnedSpeedBonus: responseTime < (this.config.timeBonus || 3000),
+            question: this.currentQuestion
         };
     }
 
@@ -153,7 +121,7 @@ class QuestionManager {
         const correctAnswers = this.questionHistory.filter(q => q.isCorrect).length;
         const totalTime = this.questionHistory.reduce((sum, q) => sum + (q.responseTime || 0), 0);
         const speedBonuses = this.questionHistory.filter(
-            q => q.isCorrect && q.responseTime < this.config.timeBonus
+            q => q.isCorrect && q.responseTime < (this.config.timeBonus || 3000)
         ).length;
 
         return {
@@ -165,36 +133,32 @@ class QuestionManager {
         };
     }
 
+    // Get wrong answers from this session
+    getWrongAnswers() {
+        return this.questionHistory.filter(q => !q.isCorrect);
+    }
+
     // Reset for new session
     reset() {
         this.currentQuestion = null;
         this.questionHistory = [];
         this.usedQuestions.clear();
+        this.generator.resetUsed();
     }
 
-    // Get a hint for the current question (for practice mode)
+    // Get a hint for the current question
     getHint() {
         if (!this.currentQuestion) return null;
-
-        const { table, multiplier, correctAnswer } = this.currentQuestion;
-
-        // Provide a counting hint
-        const hints = [
-            `Think: ${table} groups of ${multiplier}`,
-            `Count by ${table}s: ${Array.from({ length: multiplier }, (_, i) => table * (i + 1)).join(', ')}`,
-            `${table} × ${multiplier} = ${correctAnswer}` // Direct answer as last resort
-        ];
-
-        return hints;
+        return this.generator.getHint(this.currentQuestion);
     }
 
     // Check if session is complete
     isSessionComplete() {
-        return this.questionHistory.length >= this.config.questionsPerGame;
+        return this.questionHistory.length >= (this.config.questionsPerGame || 12);
     }
 
     // Get questions remaining
     getQuestionsRemaining() {
-        return Math.max(0, this.config.questionsPerGame - this.questionHistory.length);
+        return Math.max(0, (this.config.questionsPerGame || 12) - this.questionHistory.length);
     }
 }
