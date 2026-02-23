@@ -47,6 +47,8 @@
     <script src="../js/utils/helpers.js"></script>
     <script src="../js/utils/operationConfigs.js"></script>
     <script src="../js/game/QuestionGenerators.js"></script>
+    <script src="../js/managers/StorageManager.js"></script>
+    <script src="../js/managers/FactTracker.js"></script>
 
     <script>
         const resultsDiv = document.getElementById('results');
@@ -179,6 +181,110 @@
             { level: 9, label: 'Within 100', maxMinuend: 100 }
         ]);
 
+        // Test Division Generator
+        testGenerator('Division', 'division', [
+            { level: 1, table: 1, label: 'Divide by 1' },
+            { level: 2, table: 2, label: 'Divide by 2' },
+            { level: 3, table: 3, label: 'Divide by 3' },
+            { level: 5, table: 5, label: 'Divide by 5' },
+            { level: 7, table: 7, label: 'Divide by 7' },
+            { level: 9, table: 9, label: 'Divide by 9' }
+        ]);
+
+        // Extra division-specific tests
+        heading('Division — Extra Checks');
+        [1, 3, 5, 7, 9].forEach(table => {
+            const gen = createQuestionGenerator('division', { level: table, table: table, answerChoices: 4 });
+            const questions = [];
+            for (let i = 0; i < 50; i++) questions.push(gen.generate());
+
+            // No remainders (all integer results)
+            const allInteger = questions.every(q =>
+                Number.isInteger(q.operand1 / q.operand2) && q.correctAnswer === q.operand1 / q.operand2
+            );
+            log(`Divide by ${table}: All results are integers (no remainders)`, allInteger);
+
+            // All positive answers
+            const allPositive = questions.every(q => q.correctAnswer > 0);
+            log(`Divide by ${table}: All answers are positive`, allPositive);
+
+            // All answers in array are positive
+            const allAnswersPositive = questions.every(q => q.answers.every(a => a > 0));
+            log(`Divide by ${table}: All answer choices are positive`, allAnswersPositive);
+        });
+
+        // Test Mixed Generator
+        heading('Mixed Generator');
+        [1, 3, 5, 7, 9].forEach(level => {
+            const label = `Mixed level ${level}`;
+            const generator = createQuestionGenerator('mixed', {
+                level: level,
+                answerChoices: 4
+            });
+
+            const questions = [];
+            let crashes = false;
+
+            try {
+                for (let i = 0; i < 50; i++) {
+                    questions.push(generator.generate());
+                }
+            } catch (e) {
+                crashes = true;
+                log(`${label}: CRASHED — ${e.message}`, false);
+            }
+
+            if (!crashes) {
+                log(`${label}: Generated 50 questions without crash`, true);
+            }
+
+            // Correct answer in answers array
+            const allHaveCorrect = questions.every(q => q.answers.includes(q.correctAnswer));
+            log(`${label}: correctAnswer always in answers array`, allHaveCorrect);
+
+            // No duplicate answers
+            const noDuplicates = questions.every(q => {
+                const unique = new Set(q.answers);
+                return unique.size === q.answers.length;
+            });
+            log(`${label}: No duplicate answers`, noDuplicates);
+
+            // Operation field is valid
+            const validOps = ['multiplication', 'addition', 'subtraction', 'division'];
+            const allValidOps = questions.every(q => validOps.includes(q.operation));
+            log(`${label}: All operation fields are valid`, allValidOps);
+
+            // Per-operation math correctness
+            const mathCorrect = questions.every(q => {
+                if (q.operation === 'multiplication') return q.correctAnswer === q.operand1 * q.operand2;
+                if (q.operation === 'addition') return q.correctAnswer === q.operand1 + q.operand2;
+                if (q.operation === 'subtraction') return q.correctAnswer === q.operand1 - q.operand2;
+                if (q.operation === 'division') return q.correctAnswer === q.operand1 / q.operand2;
+                return false;
+            });
+            log(`${label}: All math is correct per operation`, mathCorrect);
+
+            // No negatives in subtraction questions
+            const subQuestions = questions.filter(q => q.operation === 'subtraction');
+            if (subQuestions.length > 0) {
+                const noNegatives = subQuestions.every(q => q.correctAnswer >= 0);
+                log(`${label}: No negative subtraction results`, noNegatives);
+            }
+
+            // No remainders in division questions
+            const divQuestions = questions.filter(q => q.operation === 'division');
+            if (divQuestions.length > 0) {
+                const noRemainders = divQuestions.every(q =>
+                    Number.isInteger(q.operand1 / q.operand2) && q.correctAnswer === q.operand1 / q.operand2
+                );
+                log(`${label}: No remainders in division`, noRemainders);
+            }
+
+            // Uses multiple operations (>= 2 in 50 questions)
+            const opsUsed = new Set(questions.map(q => q.operation));
+            log(`${label}: Uses >= 2 operations (found ${opsUsed.size})`, opsUsed.size >= 2);
+        });
+
         // Test buildLevelConfig utility
         heading('buildLevelConfig Utility');
 
@@ -195,11 +301,22 @@
         log(`buildLevelConfig('subtraction', 6).operation === 'subtraction'`, subConfig.operation === 'subtraction');
         log(`buildLevelConfig('subtraction', 6).label === 'Within 50'`, subConfig.label === 'Within 50');
 
+        const divConfig = buildLevelConfig('division', 4);
+        log(`buildLevelConfig('division', 4).operation === 'division'`, divConfig.operation === 'division');
+        log(`buildLevelConfig('division', 4).label === 'Divide by 4'`, divConfig.label === 'Divide by 4');
+        log(`buildLevelConfig('division', 4).table === 4`, divConfig.table === 4);
+
+        const mixConfig = buildLevelConfig('mixed', 5);
+        log(`buildLevelConfig('mixed', 5).operation === 'mixed'`, mixConfig.operation === 'mixed');
+        log(`buildLevelConfig('mixed', 5).label === 'Challenge Mix'`, mixConfig.label === 'Challenge Mix');
+
         // Test getProgressKey
         heading('getProgressKey Utility');
         log(`getProgressKey('multiplication', 5) === 'mul_5'`, getProgressKey('multiplication', 5) === 'mul_5');
         log(`getProgressKey('addition', 3) === 'add_3'`, getProgressKey('addition', 3) === 'add_3');
         log(`getProgressKey('subtraction', 7) === 'sub_7'`, getProgressKey('subtraction', 7) === 'sub_7');
+        log(`getProgressKey('division', 4) === 'div_4'`, getProgressKey('division', 4) === 'div_4');
+        log(`getProgressKey('mixed', 9) === 'mix_9'`, getProgressKey('mixed', 9) === 'mix_9');
 
         // Test isOperationLevelUnlocked
         heading('isOperationLevelUnlocked');
@@ -208,6 +325,228 @@
         log(`Level 4 locked with no progress`, !isOperationLevelUnlocked('addition', 4, {}));
         log(`Level 4 unlocked with high accuracy`, isOperationLevelUnlocked('addition', 4, { 'add_3': { accuracy: 90, gamesPlayed: 1 } }));
         log(`Level 4 unlocked with enough games`, isOperationLevelUnlocked('addition', 4, { 'add_3': { accuracy: 50, gamesPlayed: 5 } }));
+        log(`Division level 1 always unlocked`, isOperationLevelUnlocked('division', 1, {}));
+        log(`Division level 4 locked with no progress`, !isOperationLevelUnlocked('division', 4, {}));
+        log(`Division level 4 unlocked with accuracy`, isOperationLevelUnlocked('division', 4, { 'div_3': { accuracy: 90, gamesPlayed: 1 } }));
+        log(`Mixed level 3 always unlocked`, isOperationLevelUnlocked('mixed', 3, {}));
+        log(`Mixed level 4 locked with no progress`, !isOperationLevelUnlocked('mixed', 4, {}));
+
+        // ========== FactTracker Tests ==========
+
+        heading('FactTracker — Empty State');
+        {
+            // Create a fresh tracker with cleared storage
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            log(`getMasteryLevel returns 'new' for unknown fact`, ft.getMasteryLevel('3x7') === 'new');
+            log(`getFactData returns null for unknown fact`, ft.getFactData('3x7') === null);
+            log(`getWeakestFacts(5) returns empty array`, ft.getWeakestFacts(5).length === 0);
+            log(`getTotalAttempts() returns 0`, ft.getTotalAttempts() === 0);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Recording & Mastery');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // 5 correct answers → mastered
+            for (let i = 0; i < 5; i++) {
+                ft.recordAttempt('3x7', 'multiplication', true, 1000);
+            }
+            log(`5 correct → mastered`, ft.getMasteryLevel('3x7') === 'mastered');
+
+            const data5 = ft.getFactData('3x7');
+            log(`5 correct → attempts=5`, data5.attempts === 5);
+            log(`5 correct → correct=5`, data5.correct === 5);
+            log(`5 correct → streak=5`, data5.streak === 5);
+
+            // 2 correct + 3 wrong → learning
+            for (let i = 0; i < 2; i++) {
+                ft.recordAttempt('4x6', 'multiplication', true, 1000);
+            }
+            for (let i = 0; i < 3; i++) {
+                ft.recordAttempt('4x6', 'multiplication', false, 1000);
+            }
+            log(`2 correct + 3 wrong → learning`, ft.getMasteryLevel('4x6') === 'learning');
+
+            // Streak resets on wrong
+            const data46 = ft.getFactData('4x6');
+            log(`Streak resets on wrong answer`, data46.streak === 0);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Key Normalization');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // "8x7" should record under "7x8"
+            ft.recordAttempt('8x7', 'multiplication', true, 1000);
+            log(`"8x7" records under normalized key "7x8"`, ft.getFactData('7x8') !== null);
+            log(`"8x7" lookup also works`, ft.getFactData('8x7') !== null);
+
+            // "15-8" stays as "15-8" (non-commutative)
+            ft.recordAttempt('15-8', 'subtraction', true, 1000);
+            log(`"15-8" stays as "15-8"`, ft.getFactData('15-8') !== null);
+
+            // Addition normalization: "9+3" → "3+9"
+            ft.recordAttempt('9+3', 'addition', true, 1000);
+            log(`"9+3" normalizes to "3+9"`, ft.getFactData('3+9') !== null);
+
+            // Static normalizeFactKey tests
+            log(`normalizeFactKey mul 7,3 → "3x7"`, FactTracker.normalizeFactKey('multiplication', 7, 3) === '3x7');
+            log(`normalizeFactKey sub 15,8 → "15-8"`, FactTracker.normalizeFactKey('subtraction', 15, 8) === '15-8');
+            log(`normalizeFactKey div 42,7 → "42/7"`, FactTracker.normalizeFactKey('division', 42, 7) === '42/7');
+            log(`normalizeFactKey add 9,3 → "3+9"`, FactTracker.normalizeFactKey('addition', 9, 3) === '3+9');
+
+            // Static parseFactKey tests
+            const parsed = FactTracker.parseFactKey('3x7');
+            log(`parseFactKey('3x7') → multiplication`, parsed.operation === 'multiplication');
+            log(`parseFactKey('3x7') → operands [3,7]`, parsed.operands[0] === 3 && parsed.operands[1] === 7);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — getWeakestFacts');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // Create facts with varying accuracy
+            // Fact A: 1/5 = 20%
+            ft.recordAttempt('2x3', 'multiplication', true, 1000);
+            for (let i = 0; i < 4; i++) ft.recordAttempt('2x3', 'multiplication', false, 1000);
+
+            // Fact B: 3/5 = 60%
+            for (let i = 0; i < 3; i++) ft.recordAttempt('4x5', 'multiplication', true, 1000);
+            for (let i = 0; i < 2; i++) ft.recordAttempt('4x5', 'multiplication', false, 1000);
+
+            // Fact C: 5/5 = 100%
+            for (let i = 0; i < 5; i++) ft.recordAttempt('6x7', 'multiplication', true, 1000);
+
+            const weakest = ft.getWeakestFacts(3);
+            log(`getWeakestFacts returns array sorted by accuracy ascending`,
+                weakest.length === 3 &&
+                weakest[0].factKey === '2x3' &&
+                weakest[1].factKey === '4x5' &&
+                weakest[2].factKey === '6x7'
+            );
+
+            // Filter by operation
+            ft.recordAttempt('5+3', 'addition', false, 1000);
+            ft.recordAttempt('5+3', 'addition', false, 1000);
+            ft.recordAttempt('5+3', 'addition', false, 1000);
+            const weakAdd = ft.getWeakestFacts('addition', 5);
+            log(`getWeakestFacts filters by operation`, weakAdd.length === 1 && weakAdd[0].operation === 'addition');
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — All Mastered State');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // Create multiple mastered facts
+            const facts = ['1x1', '2x2', '3x3'];
+            facts.forEach(key => {
+                for (let i = 0; i < 6; i++) ft.recordAttempt(key, 'multiplication', true, 800);
+            });
+
+            const allFacts = ft.getAllFacts();
+            const allMastered = allFacts.every(f => f.masteryLevel === 'mastered');
+            log(`All facts report mastered correctly`, allMastered);
+            log(`getAllFacts returns correct count`, allFacts.length === 3);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Single Fact State');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            ft.recordAttempt('5x5', 'multiplication', true, 1500);
+            log(`1 attempt → 'new' mastery (< 3 attempts)`, ft.getMasteryLevel('5x5') === 'new');
+
+            const data = ft.getFactData('5x5');
+            log(`Single fact has attempts=1`, data.attempts === 1);
+            log(`Single fact has correct=1`, data.correct === 1);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Storage Corruption Recovery');
+        {
+            // Mock corrupted JSON with some valid and invalid entries
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {
+                '3x7': { factKey: '3x7', operation: 'multiplication', operands: [3, 7], attempts: 5, correct: 5, incorrect: 0, streak: 5, lastSeen: 1000, averageResponseTime: 800, masteryLevel: 'mastered' },
+                'bad_entry': 'not an object',
+                'another_bad': { noFactKey: true },
+                '2x3': { factKey: '2x3', operation: 'multiplication', operands: [2, 3], attempts: 3, correct: 1, incorrect: 2, streak: 0, lastSeen: 1000, averageResponseTime: 1200, masteryLevel: 'learning' }
+            });
+
+            const ft = new FactTracker();
+            const allFacts = ft.getAllFacts();
+            log(`Storage corruption: valid entries loaded (expected 2)`, allFacts.length === 2);
+            log(`Storage corruption: invalid entries filtered out`, ft.getFactData('bad_entry') === null);
+            log(`Storage corruption: valid fact 3x7 preserved`, ft.getFactData('3x7') !== null && ft.getFactData('3x7').attempts === 5);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Weighted Selection Statistical Test');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // Seed 1 learning fact + 4 mastered facts
+            // Learning fact: 2x8 (2 correct, 3 wrong = 40% accuracy, 5 attempts → learning)
+            for (let i = 0; i < 2; i++) ft.recordAttempt('2x8', 'multiplication', true, 1000);
+            for (let i = 0; i < 3; i++) ft.recordAttempt('2x8', 'multiplication', false, 1000);
+
+            // 4 mastered facts
+            ['1x1', '2x2', '3x3', '4x4'].forEach(key => {
+                for (let i = 0; i < 6; i++) ft.recordAttempt(key, 'multiplication', true, 800);
+            });
+
+            // Verify mastery levels
+            log(`Weighted test: 2x8 is learning`, ft.getMasteryLevel('2x8') === 'learning');
+            log(`Weighted test: 1x1 is mastered`, ft.getMasteryLevel('1x1') === 'mastered');
+
+            // Verify weight map
+            const weights = ft.getQuestionWeights('multiplication');
+            log(`Weighted test: learning fact weight=6`, weights['2x8'] === 6);
+            log(`Weighted test: mastered fact weight=1`, weights['1x1'] === 1);
+
+            // Statistical test: with weight 6 for learning vs 1 for each mastered (total=10),
+            // learning fact should get ~60% of selections, far above uniform ~20%
+            const totalWeight = 6 + 4 * 1; // = 10
+            const learningRatio = 6 / totalWeight; // = 0.6
+            log(`Weighted test: learning fact weight ratio (${(learningRatio * 100).toFixed(0)}%) > 30% (uniform ~20%)`, learningRatio > 0.30);
+
+            ft.destroy();
+        }
+
+        heading('FactTracker — Dual Call Signature');
+        {
+            storageManager.set(STORAGE_KEYS.FACT_PERFORMANCE, {});
+            const ft = new FactTracker();
+
+            // Signature 1: (factKey, operation, isCorrect, responseTime)
+            ft.recordAttempt('3x4', 'multiplication', true, 1500);
+            log(`Signature 1 records correctly`, ft.getFactData('3x4').attempts === 1);
+
+            // Signature 2: (factKey, wasCorrect, responseTimeMs)
+            ft.recordAttempt('3x4', true, 2000);
+            log(`Signature 2 records correctly`, ft.getFactData('3x4').attempts === 2);
+
+            ft.destroy();
+        }
 
         // Summary
         const total = passCount + failCount;

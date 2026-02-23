@@ -112,7 +112,21 @@ class App {
         const operationTabs = document.querySelectorAll('.operation-tab');
         operationTabs.forEach(tab => {
             tab.addEventListener('click', () => {
-                this.selectedOperation = tab.dataset.operation;
+                const op = tab.dataset.operation;
+
+                // Check division lock
+                if (op === 'division' && !this.isDivisionUnlocked()) {
+                    this.showLockedTooltip(tab, 'Complete any multiplication table at Intermediate level (table 4+) with 60%+ accuracy to unlock Division.');
+                    return;
+                }
+
+                // Check mixed lock
+                if (op === 'mixed' && !this.isMixedUnlocked()) {
+                    this.showLockedTooltip(tab, 'Play at least 3 different operations to unlock Mixed mode.');
+                    return;
+                }
+
+                this.selectedOperation = op;
                 operationTabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
                 this.populateLevelSelect();
@@ -312,6 +326,76 @@ class App {
         this.navigateToMenu();
     }
 
+    // Check if division is unlocked
+    isDivisionUnlocked() {
+        const tableProgress = storageManager.getTableProgress();
+        const operationProgress = storageManager.getOperationProgress();
+
+        // Check multiplication tables 4+ (intermediate) for gamesPlayed > 0 and accuracy >= 60
+        for (let t = 4; t <= 9; t++) {
+            const tp = tableProgress[t];
+            if (tp && tp.gamesPlayed > 0 && tp.accuracy >= 60) return true;
+
+            // Also check operationProgress for multiplication
+            const key = getProgressKey('multiplication', t);
+            const op = operationProgress[key];
+            if (op && op.gamesPlayed > 0 && op.accuracy >= 60) return true;
+        }
+        return false;
+    }
+
+    // Check if mixed mode is unlocked
+    isMixedUnlocked() {
+        const operationProgress = storageManager.getOperationProgress();
+        const tableProgress = storageManager.getTableProgress();
+
+        const opsWithGames = new Set();
+
+        // Check multiplication via tableProgress
+        for (let t = 1; t <= 9; t++) {
+            if (tableProgress[t] && tableProgress[t].gamesPlayed > 0) {
+                opsWithGames.add('multiplication');
+                break;
+            }
+        }
+
+        // Check all operation progress entries
+        Object.keys(operationProgress).forEach(key => {
+            const data = operationProgress[key];
+            if (data && data.gamesPlayed > 0) {
+                if (key.startsWith('mul_')) opsWithGames.add('multiplication');
+                else if (key.startsWith('add_')) opsWithGames.add('addition');
+                else if (key.startsWith('sub_')) opsWithGames.add('subtraction');
+                else if (key.startsWith('div_')) opsWithGames.add('division');
+            }
+        });
+
+        return opsWithGames.size >= 3;
+    }
+
+    // Show locked tooltip near a tab button
+    showLockedTooltip(tabElement, message) {
+        // Remove any existing tooltip
+        const existing = document.querySelector('.locked-tooltip');
+        if (existing) existing.remove();
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'locked-tooltip';
+        tooltip.textContent = message;
+        tabElement.parentElement.appendChild(tooltip);
+
+        // Position near the tab
+        const rect = tabElement.getBoundingClientRect();
+        const parentRect = tabElement.parentElement.getBoundingClientRect();
+        tooltip.style.top = (rect.bottom - parentRect.top + 8) + 'px';
+        tooltip.style.left = (rect.left - parentRect.left) + 'px';
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (tooltip.parentElement) tooltip.remove();
+        }, 3000);
+    }
+
     // Level select population
     populateLevelSelect() {
         const levelGrid = document.getElementById('level-grid');
@@ -325,6 +409,32 @@ class App {
 
         const tableProgress = storageManager.getTableProgress();
         const operationProgress = storageManager.getOperationProgress();
+
+        // Check operation-level lock for division and mixed
+        if (operation === 'division' && !this.isDivisionUnlocked()) {
+            levelGrid.innerHTML = `
+                <div class="operation-locked-message">
+                    <div class="lock-icon-large">🔒</div>
+                    <h3>Division Locked</h3>
+                    <p>Complete any multiplication table at Intermediate level (table 4+) with 60%+ accuracy to unlock Division.</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (operation === 'mixed' && !this.isMixedUnlocked()) {
+            levelGrid.innerHTML = `
+                <div class="operation-locked-message">
+                    <div class="lock-icon-large">🔒</div>
+                    <h3>Mixed Mode Locked</h3>
+                    <p>Play at least 3 different operations to unlock Mixed mode.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Get recommendation for highlighting
+        const recommendation = progressManager.getRecommendedPractice();
 
         levels.forEach(levelDef => {
             const level = levelDef.level;
@@ -351,9 +461,17 @@ class App {
             const mastery = MASTERY_LEVELS[masteryKey] || MASTERY_LEVELS.LEARNING;
             const opLabel = OPERATION_LABELS[operation];
 
+            // Check if this level card matches the recommendation
+            const isRecommended = isUnlocked && recommendation &&
+                recommendation.operation === operation &&
+                (recommendation.source === 'factTracker'
+                    ? true  // factTracker recommendation applies to the whole operation
+                    : (recommendation.level === level || recommendation.table === level));
+
             const levelCard = document.createElement('div');
-            levelCard.className = `level-card ${isUnlocked ? '' : 'locked'}`;
+            levelCard.className = `level-card ${isUnlocked ? '' : 'locked'} ${isRecommended ? 'recommended' : ''}`;
             levelCard.innerHTML = `
+                ${isRecommended ? '<div class="recommended-badge">Recommended</div>' : ''}
                 <div class="level-number">${opLabel.icon}</div>
                 <div class="level-title">${levelDef.label}</div>
                 <div class="level-tier" style="color: ${tier.color}">${tier.name}</div>
@@ -402,6 +520,9 @@ class App {
         // Update table/operation progress grid
         this.updateTableProgressGrid();
 
+        // Update fact mastery display
+        this.updateFactMasteryDisplay();
+
         // Update achievements grid
         this.updateAchievementsGrid();
     }
@@ -417,7 +538,7 @@ class App {
         tabsContainer.className = 'progress-operation-tabs';
         tabsContainer.style.gridColumn = '1 / -1';
 
-        const operations = ['multiplication', 'addition', 'subtraction'];
+        const operations = ['multiplication', 'addition', 'subtraction', 'division', 'mixed'];
         const progressOperation = this._progressViewOperation || 'multiplication';
 
         operations.forEach(op => {
@@ -485,6 +606,132 @@ class App {
         }
     }
 
+    updateFactMasteryDisplay() {
+        const legend = document.getElementById('fact-mastery-legend');
+        const content = document.getElementById('fact-mastery-content');
+        if (!legend || !content) return;
+
+        // Render legend
+        legend.innerHTML = '';
+        const legendRow = document.createElement('div');
+        legendRow.className = 'mastery-legend';
+        Object.values(FACT_MASTERY).forEach(level => {
+            const swatch = document.createElement('div');
+            swatch.className = 'mastery-legend-item';
+            swatch.innerHTML = `<span class="mastery-swatch" style="background:${level.color}"></span>${level.name}`;
+            legendRow.appendChild(swatch);
+        });
+        legend.appendChild(legendRow);
+
+        // Render grid or list based on current progress view operation
+        content.innerHTML = '';
+        const operation = this._progressViewOperation || 'multiplication';
+
+        if (operation === 'multiplication') {
+            this._renderMultiplicationGrid(content);
+        } else {
+            this._renderFactList(content, operation);
+        }
+    }
+
+    _renderMultiplicationGrid(container) {
+        const grid = document.createElement('div');
+        grid.className = 'multiplication-mastery-grid';
+
+        // Top-left empty corner
+        const corner = document.createElement('div');
+        corner.className = 'grid-cell grid-header';
+        corner.textContent = 'x';
+        grid.appendChild(corner);
+
+        // Column headers (1-9)
+        for (let c = 1; c <= 9; c++) {
+            const header = document.createElement('div');
+            header.className = 'grid-cell grid-header';
+            header.textContent = c;
+            grid.appendChild(header);
+        }
+
+        // Rows
+        for (let r = 1; r <= 9; r++) {
+            // Row header
+            const rowHeader = document.createElement('div');
+            rowHeader.className = 'grid-cell grid-header';
+            rowHeader.textContent = r;
+            grid.appendChild(rowHeader);
+
+            // Fact cells
+            for (let c = 1; c <= 9; c++) {
+                const product = r * c;
+                const factKey = FactTracker.normalizeFactKey('multiplication', r, c);
+                const mastery = (typeof factTracker !== 'undefined') ? factTracker.getMasteryLevel(factKey) : 'new';
+                const factData = (typeof factTracker !== 'undefined') ? factTracker.getFactData(factKey) : null;
+                const masteryInfo = FACT_MASTERY[mastery.toUpperCase()] || FACT_MASTERY.NEW;
+
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell fact-cell';
+                cell.style.background = masteryInfo.color;
+                cell.textContent = product;
+
+                // Tooltip
+                let tooltip = `${r} x ${c} = ${product}`;
+                if (factData && factData.attempts > 0) {
+                    const acc = Math.round((factData.correct / factData.attempts) * 100);
+                    tooltip += `\n${acc}% (${factData.attempts} attempts)`;
+                } else {
+                    tooltip += `\nNot practiced yet`;
+                }
+                cell.title = tooltip;
+
+                grid.appendChild(cell);
+            }
+        }
+
+        container.appendChild(grid);
+    }
+
+    _renderFactList(container, operation) {
+        if (typeof factTracker === 'undefined') {
+            container.innerHTML = '<p class="fact-list-empty">No facts practiced yet</p>';
+            return;
+        }
+
+        const facts = factTracker.getAllFacts(operation)
+            .filter(f => f.attempts > 0);
+
+        if (facts.length === 0) {
+            container.innerHTML = '<p class="fact-list-empty">No facts practiced yet</p>';
+            return;
+        }
+
+        // Sort weakest first
+        facts.sort((a, b) => {
+            const accA = a.correct / a.attempts;
+            const accB = b.correct / b.attempts;
+            return accA - accB;
+        });
+
+        const list = document.createElement('div');
+        list.className = 'fact-list';
+
+        facts.forEach(fact => {
+            const acc = Math.round((fact.correct / fact.attempts) * 100);
+            const masteryInfo = FACT_MASTERY[fact.masteryLevel.toUpperCase()] || FACT_MASTERY.NEW;
+
+            const item = document.createElement('div');
+            item.className = 'fact-list-item';
+            item.innerHTML = `
+                <span class="fact-key">${fact.factKey}</span>
+                <span class="fact-accuracy">${acc}%</span>
+                <span class="fact-attempts">${fact.attempts} attempts</span>
+                <span class="fact-mastery-badge" style="background:${masteryInfo.color}">${masteryInfo.name}</span>
+            `;
+            list.appendChild(item);
+        });
+
+        container.appendChild(list);
+    }
+
     updateAchievementsGrid() {
         const achievementsGrid = document.getElementById('achievements-grid');
         if (!achievementsGrid) return;
@@ -550,6 +797,38 @@ class App {
                 star.style.animationDelay = `${i * 0.2}s`;
             }
             starsContainer.appendChild(star);
+        }
+
+        // Display mixed-mode breakdown if available
+        const breakdownContainer = document.getElementById('mixed-breakdown');
+        if (breakdownContainer) {
+            if (results.operationBreakdown) {
+                const tbody = document.getElementById('breakdown-tbody');
+                tbody.innerHTML = '';
+
+                Object.keys(results.operationBreakdown).forEach(op => {
+                    const data = results.operationBreakdown[op];
+                    const opLabel = OPERATION_LABELS[op] || { icon: '', name: op };
+                    const acc = data.attempted > 0 ? Math.round((data.correct / data.attempted) * 100) : 0;
+                    let accClass = 'accuracy-green';
+                    if (acc < 60) accClass = 'accuracy-red';
+                    else if (acc < 80) accClass = 'accuracy-yellow';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${opLabel.icon} ${opLabel.name}</td>
+                        <td>${data.attempted}</td>
+                        <td>${data.correct}</td>
+                        <td>${data.attempted - data.correct}</td>
+                        <td class="${accClass}">${acc}%</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                breakdownContainer.style.display = 'block';
+            } else {
+                breakdownContainer.style.display = 'none';
+            }
         }
 
         // Display newly unlocked achievements

@@ -25,7 +25,8 @@ class RewardManager {
             // Check if achievement criteria is met
             const profileWithProgress = {
                 ...profile,
-                tableProgress
+                tableProgress,
+                operationProgress: storageManager.getOperationProgress()
             };
 
             if (achievement.check(profileWithProgress, sessionResults)) {

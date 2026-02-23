@@ -292,6 +292,20 @@ class GameEngine {
         document.getElementById('question-text').textContent = this.currentQuestion.questionText;
         this.updateAnswerButtons();
 
+        // Show operation label for mixed mode
+        const opLabelEl = document.getElementById('question-operation-label');
+        if (opLabelEl) {
+            if (this.operation === 'mixed' && this.currentQuestion.operation) {
+                const label = OPERATION_LABELS[this.currentQuestion.operation];
+                if (label) {
+                    opLabelEl.textContent = `${label.icon} ${label.name}`;
+                    opLabelEl.style.display = 'block';
+                }
+            } else {
+                opLabelEl.style.display = 'none';
+            }
+        }
+
         // Pre-fetch hint if AI hints available
         if (typeof hintManager !== 'undefined') {
             hintManager.prefetchHint(this.currentQuestion);
@@ -542,6 +556,22 @@ class GameEngine {
             wrongAnswers: this.questionManager.getWrongAnswers(),
             questionHistory: this.questionManager.questionHistory
         };
+
+        // Compute operation breakdown for mixed mode
+        if (this.operation === 'mixed' && this.questionManager.questionHistory) {
+            const breakdown = {};
+            this.questionManager.questionHistory.forEach(entry => {
+                const op = entry.operation || 'unknown';
+                if (!breakdown[op]) {
+                    breakdown[op] = { attempted: 0, correct: 0 };
+                }
+                breakdown[op].attempted++;
+                if (entry.correct) {
+                    breakdown[op].correct++;
+                }
+            });
+            results.operationBreakdown = breakdown;
+        }
 
         // Save progress (skip for practice mode)
         if (!this.practiceMode) {

@@ -359,12 +359,72 @@ class ProgressManager {
             }
         });
 
+        // Append per-fact weak areas from FactTracker
+        if (typeof factTracker !== 'undefined') {
+            const weakFacts = factTracker.getWeakestFacts(10)
+                .filter(f => f.attempts >= 3);
+            weakFacts.forEach(f => {
+                const acc = f.attempts > 0 ? Math.round((f.correct / f.attempts) * 100) : 0;
+                weakAreas.push({
+                    type: 'fact',
+                    factKey: f.factKey,
+                    operation: f.operation,
+                    accuracy: acc,
+                    attempts: f.attempts,
+                    masteryLevel: f.masteryLevel
+                });
+            });
+        }
+
         weakAreas.sort((a, b) => a.accuracy - b.accuracy);
         return weakAreas;
     }
 
     // Get recommended practice (which table/level to practice next)
     getRecommendedPractice() {
+        // Priority 0: Fact-level weak areas from FactTracker
+        if (typeof factTracker !== 'undefined' && factTracker.getTotalAttempts() >= 10) {
+            const weakFacts = factTracker.getWeakestFacts(10)
+                .filter(f => f.attempts >= 3);
+
+            if (weakFacts.length > 0) {
+                // Group weak facts by operation, find operation with lowest avg accuracy
+                const opAccuracy = {};
+                weakFacts.forEach(f => {
+                    if (!opAccuracy[f.operation]) {
+                        opAccuracy[f.operation] = { total: 0, correct: 0, facts: [] };
+                    }
+                    opAccuracy[f.operation].total += f.attempts;
+                    opAccuracy[f.operation].correct += f.correct;
+                    opAccuracy[f.operation].facts.push(f);
+                });
+
+                let worstOp = null;
+                let worstAcc = 100;
+                Object.keys(opAccuracy).forEach(op => {
+                    const acc = opAccuracy[op].total > 0
+                        ? Math.round((opAccuracy[op].correct / opAccuracy[op].total) * 100)
+                        : 0;
+                    if (acc < worstAcc) {
+                        worstAcc = acc;
+                        worstOp = op;
+                    }
+                });
+
+                if (worstOp && worstAcc < 85) {
+                    return {
+                        operation: worstOp,
+                        level: 1,
+                        table: worstOp === 'multiplication' ? 1 : undefined,
+                        reason: 'Weak facts need practice',
+                        currentAccuracy: worstAcc,
+                        weakFacts: opAccuracy[worstOp].facts,
+                        source: 'factTracker'
+                    };
+                }
+            }
+        }
+
         // Priority 1: Weak areas
         const weakAreas = this.getWeakAreas();
         if (weakAreas.length > 0) {

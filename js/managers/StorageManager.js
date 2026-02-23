@@ -52,6 +52,21 @@ class StorageManager {
             this.set(STORAGE_KEYS.ACHIEVEMENTS, defaultAchievements);
         }
 
+        // Sync achievements: ensure any new ACHIEVEMENTS keys exist in stored data
+        const storedAchievements = this.get(STORAGE_KEYS.ACHIEVEMENTS);
+        if (storedAchievements) {
+            let updated = false;
+            Object.keys(ACHIEVEMENTS).forEach(key => {
+                if (!storedAchievements[key]) {
+                    storedAchievements[key] = { unlocked: false, unlockedDate: null };
+                    updated = true;
+                }
+            });
+            if (updated) {
+                this.set(STORAGE_KEYS.ACHIEVEMENTS, storedAchievements);
+            }
+        }
+
         // Initialize settings
         if (!this.get(STORAGE_KEYS.SETTINGS)) {
             this.set(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);

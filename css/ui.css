@@ -423,6 +423,97 @@
     font-weight: 600;
 }
 
+/* Operation Locked Message */
+.operation-locked-message {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: var(--spacing-2xl);
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.operation-locked-message .lock-icon-large {
+    font-size: 4rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.operation-locked-message h3 {
+    font-size: var(--font-size-2xl);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.operation-locked-message p {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    max-width: 400px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+/* Locked Tooltip */
+.locked-tooltip {
+    position: absolute;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--color-warning);
+    max-width: 300px;
+    line-height: 1.4;
+    animation: tooltipFadeIn 0.2s ease;
+    pointer-events: none;
+}
+
+@keyframes tooltipFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mixed Breakdown Table */
+.mixed-breakdown {
+    margin: var(--spacing-xl) 0;
+    padding: var(--spacing-lg);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.breakdown-title {
+    font-size: var(--font-size-lg);
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+}
+
+.breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+}
+
+.breakdown-table th {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: center;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+}
+
+.breakdown-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: center;
+    color: var(--color-text);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.accuracy-green { color: #39ff14; font-weight: 700; }
+.accuracy-yellow { color: #fbbf24; font-weight: 700; }
+.accuracy-red { color: #ff006e; font-weight: 700; }
+
 /* Results Screen */
 .results-content {
     text-align: center;
@@ -652,6 +743,158 @@ input[type="range"]::-moz-range-thumb {
     justify-content: center;
 }
 
+/* Fact Mastery Card */
+.fact-mastery-card {
+    background: var(--gradient-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    box-shadow: var(--shadow-lg);
+}
+
+.fact-mastery-card h3 {
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-primary);
+}
+
+/* Mastery Legend */
+.mastery-legend {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.mastery-legend-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.mastery-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+}
+
+/* Multiplication Mastery Grid (10 columns: 1 header + 9 data) */
+.multiplication-mastery-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: 4px;
+    min-width: 0;
+}
+
+.grid-cell.grid-header {
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--color-text-secondary);
+    font-weight: 700;
+}
+
+.grid-cell.fact-cell {
+    color: white;
+    cursor: default;
+    transition: transform 0.15s ease;
+}
+
+.grid-cell.fact-cell:hover {
+    transform: scale(1.15);
+    z-index: 1;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Fact List */
+.fact-list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.fact-list-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+}
+
+.fact-key {
+    font-weight: 700;
+    color: var(--color-text);
+    min-width: 60px;
+}
+
+.fact-accuracy {
+    font-weight: 600;
+    color: var(--color-primary);
+    min-width: 40px;
+}
+
+.fact-attempts {
+    color: var(--color-text-secondary);
+    flex: 1;
+}
+
+.fact-mastery-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.fact-list-empty {
+    text-align: center;
+    color: var(--color-text-secondary);
+    padding: var(--spacing-xl);
+    font-style: italic;
+}
+
+/* Recommended Level Card */
+.level-card.recommended {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.3), 0 0 30px rgba(255, 215, 0, 0.1);
+}
+
+.recommended-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--color-accent);
+    color: var(--color-background);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.9; }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .operation-tabs {
@@ -697,5 +940,13 @@ input[type="range"]::-moz-range-thumb {
     .achievements-grid,
     .tables-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .multiplication-mastery-grid {
+        max-width: 100%;
+    }
+
+    .grid-cell {
+        font-size: 10px;
     }
 }

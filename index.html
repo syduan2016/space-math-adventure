@@ -62,6 +62,8 @@
                 <button class="operation-tab active" data-operation="multiplication">✖️ Multiplication</button>
                 <button class="operation-tab" data-operation="addition">➕ Addition</button>
                 <button class="operation-tab" data-operation="subtraction">➖ Subtraction</button>
+                <button class="operation-tab" data-operation="division">➗ Division</button>
+                <button class="operation-tab" data-operation="mixed">🎲 Mixed</button>
             </div>
 
             <div class="level-grid" id="level-grid">
@@ -100,6 +102,7 @@
 
             <!-- Question Panel -->
             <div id="question-panel" class="question-panel">
+                <span id="question-operation-label" class="question-operation-label" style="display:none"></span>
                 <div class="question-text" id="question-text">What is 3 × 7?</div>
                 <div class="answer-buttons" id="answer-buttons">
                     <!-- Answer buttons will be populated by JavaScript -->
@@ -129,6 +132,23 @@
                         <span class="stat-label">Questions</span>
                         <span class="stat-value" id="result-questions">0</span>
                     </div>
+                </div>
+
+                <div id="mixed-breakdown" class="mixed-breakdown" style="display:none">
+                    <h3 class="breakdown-title">Per-Operation Breakdown</h3>
+                    <table class="breakdown-table">
+                        <thead>
+                            <tr>
+                                <th>Operation</th>
+                                <th>Attempted</th>
+                                <th>Correct</th>
+                                <th>Incorrect</th>
+                                <th>Accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="breakdown-tbody">
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="achievements-unlocked" id="achievements-unlocked">
@@ -184,6 +204,13 @@
                     <div class="tables-grid" id="tables-progress">
                         <!-- Table progress will be populated by JavaScript -->
                     </div>
+                </div>
+
+                <!-- Fact Mastery -->
+                <div class="fact-mastery-card" id="fact-mastery-section">
+                    <h3>Fact Mastery</h3>
+                    <div id="fact-mastery-legend"></div>
+                    <div id="fact-mastery-content"></div>
                 </div>
 
                 <!-- Achievements -->
@@ -266,6 +293,7 @@
     <script src="js/utils/operationConfigs.js"></script>
     <script src="js/game/QuestionGenerators.js"></script>
     <script src="js/managers/StorageManager.js"></script>
+    <script src="js/managers/FactTracker.js"></script>
     <script src="js/managers/SoundManager.js"></script>
     <script src="js/managers/ProgressManager.js"></script>
     <script src="js/managers/RewardManager.js"></script>

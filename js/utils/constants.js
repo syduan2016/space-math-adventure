@@ -274,6 +274,100 @@ const ACHIEVEMENTS = {
         icon: '⭐',
         stars: 35,
         check: (profile) => profile.overallAccuracy >= 85
+    },
+
+    // Operation Achievements
+    addition_ace: {
+        id: 'addition_ace',
+        name: 'Addition Ace',
+        description: 'Get 3 stars on all 9 addition levels',
+        icon: '➕',
+        stars: 40,
+        check: (profile) => {
+            const opProgress = profile.operationProgress || {};
+            const levels = OPERATION_LEVELS.addition || [];
+            return levels.every(l => {
+                const key = getProgressKey('addition', l.level);
+                const data = opProgress[key];
+                return data && data.bestStars >= 3;
+            });
+        }
+    },
+    subtraction_star: {
+        id: 'subtraction_star',
+        name: 'Subtraction Star',
+        description: 'Get 3 stars on all 9 subtraction levels',
+        icon: '➖',
+        stars: 40,
+        check: (profile) => {
+            const opProgress = profile.operationProgress || {};
+            const levels = OPERATION_LEVELS.subtraction || [];
+            return levels.every(l => {
+                const key = getProgressKey('subtraction', l.level);
+                const data = opProgress[key];
+                return data && data.bestStars >= 3;
+            });
+        }
+    },
+    division_dynamo: {
+        id: 'division_dynamo',
+        name: 'Division Dynamo',
+        description: 'Get 3 stars on all 9 division levels',
+        icon: '➗',
+        stars: 40,
+        check: (profile) => {
+            const opProgress = profile.operationProgress || {};
+            const levels = OPERATION_LEVELS.division || [];
+            return levels.every(l => {
+                const key = getProgressKey('division', l.level);
+                const data = opProgress[key];
+                return data && data.bestStars >= 3;
+            });
+        }
+    },
+    math_mixer: {
+        id: 'math_mixer',
+        name: 'Math Mixer',
+        description: 'Play 10 mixed-mode games',
+        icon: '🎲',
+        stars: 30,
+        check: (profile) => {
+            const opProgress = profile.operationProgress || {};
+            let totalMixedGames = 0;
+            const levels = OPERATION_LEVELS.mixed || [];
+            levels.forEach(l => {
+                const key = getProgressKey('mixed', l.level);
+                const data = opProgress[key];
+                if (data) totalMixedGames += (data.gamesPlayed || 0);
+            });
+            return totalMixedGames >= 10;
+        }
+    },
+    operation_master: {
+        id: 'operation_master',
+        name: 'Operation Master',
+        description: 'Get 3 stars on ALL operation levels',
+        icon: '🏅',
+        stars: 150,
+        check: (profile) => {
+            const opProgress = profile.operationProgress || {};
+            const ops = ['addition', 'subtraction', 'multiplication', 'division', 'mixed'];
+            return ops.every(op => {
+                const levels = OPERATION_LEVELS[op] || [];
+                return levels.every(l => {
+                    const key = getProgressKey(op, l.level);
+                    // For multiplication, also check tableProgress
+                    if (op === 'multiplication') {
+                        const tp = profile.tableProgress || {};
+                        const tData = tp[l.level];
+                        const opData = opProgress[key];
+                        return (tData && tData.bestStars >= 3) || (opData && opData.bestStars >= 3);
+                    }
+                    const data = opProgress[key];
+                    return data && data.bestStars >= 3;
+                });
+            });
+        }
     }
 };
 

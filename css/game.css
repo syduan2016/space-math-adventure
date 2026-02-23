@@ -108,6 +108,17 @@
     z-index: 10;
 }
 
+.question-operation-label {
+    display: block;
+    text-align: center;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-accent);
+    margin-bottom: var(--spacing-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .question-text {
     font-size: var(--font-size-3xl);
     font-weight: 700;

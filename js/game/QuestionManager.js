@@ -26,29 +26,82 @@ class QuestionManager {
         this.questionHistory = [];
         this.usedQuestions = new Set();
         this.adaptiveManager = null; // Set externally if adaptive mode is on
+        this.recentFacts = []; // Ring buffer for anti-repeat (size 5)
     }
 
     // Generate a new question
     generateQuestion() {
-        const question = this.generator.generate();
+        // Use weighted selection if adaptive manager has enough data
+        if (this.adaptiveManager && this.adaptiveManager.getTotalAttempts() >= 10) {
+            return this._selectWeightedQuestion();
+        }
 
-        // Apply adaptive weighting if available
-        if (this.adaptiveManager) {
-            const weights = this.adaptiveManager.getQuestionWeights(this.operation, this.table || this.levelConfig.level);
-            // Potentially regenerate if this fact is already strong and there are weak ones
-            if (weights && weights[question.factKey] !== undefined && Math.random() < 0.5) {
-                const weakFacts = this.adaptiveManager.getWeakestFacts(this.operation, 3);
-                if (weakFacts.length > 0 && !weakFacts.some(f => f.factKey === question.factKey)) {
-                    // Try to get a question for a weak fact - but don't infinite loop
-                    const retry = this.generator.generate();
-                    if (weakFacts.some(f => f.factKey === retry.factKey)) {
-                        return this._setCurrentQuestion(retry);
-                    }
-                }
+        // Otherwise: uniform random from generator
+        const question = this.generator.generate();
+        return this._setCurrentQuestion(question);
+    }
+
+    // Weighted question selection using adaptive mastery data
+    _selectWeightedQuestion() {
+        // Generate pool of 20 candidate questions
+        const candidates = [];
+        const seenKeys = new Set();
+
+        for (let i = 0; i < 20; i++) {
+            const q = this.generator.generate();
+            // Normalize the factKey for dedup
+            const parsed = FactTracker.parseFactKey(q.factKey);
+            const normalizedKey = parsed
+                ? FactTracker.normalizeFactKey(parsed.operation, parsed.operands[0], parsed.operands[1])
+                : q.factKey;
+
+            if (!seenKeys.has(normalizedKey)) {
+                seenKeys.add(normalizedKey);
+                candidates.push({ question: q, normalizedKey });
             }
         }
 
-        return this._setCurrentQuestion(question);
+        if (candidates.length === 0) {
+            return this._setCurrentQuestion(this.generator.generate());
+        }
+
+        // Assign weight per candidate
+        const weighted = candidates.map(c => {
+            const mastery = this.adaptiveManager.getMasteryLevel(c.normalizedKey);
+            let weight = FACT_WEIGHT_MAP[mastery] || FACT_WEIGHT_MAP.new;
+
+            // Recency bonus: 1.5x if not in recent facts
+            if (!this.recentFacts.includes(c.normalizedKey)) {
+                weight *= 1.5;
+            }
+
+            return { ...c, weight };
+        });
+
+        // Weighted random selection
+        const totalWeight = weighted.reduce((sum, c) => sum + c.weight, 0);
+        let roll = Math.random() * totalWeight;
+
+        let selected = weighted[0];
+        for (const c of weighted) {
+            roll -= c.weight;
+            if (roll <= 0) {
+                selected = c;
+                break;
+            }
+        }
+
+        // Add to recent facts ring buffer
+        this._addToRecentFacts(selected.normalizedKey);
+
+        return this._setCurrentQuestion(selected.question);
+    }
+
+    _addToRecentFacts(factKey) {
+        this.recentFacts.push(factKey);
+        if (this.recentFacts.length > 5) {
+            this.recentFacts.shift();
+        }
     }
 
     _setCurrentQuestion(question) {
@@ -143,6 +196,7 @@ class QuestionManager {
         this.currentQuestion = null;
         this.questionHistory = [];
         this.usedQuestions.clear();
+        this.recentFacts = [];
         this.generator.resetUsed();
     }
 
